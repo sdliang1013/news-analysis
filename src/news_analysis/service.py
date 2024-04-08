@@ -1,5 +1,4 @@
-from hdfs import InsecureClient
-from pyarrow import hdfs, parquet, fs
+from pyarrow import parquet, fs
 
 
 class HdfsService:

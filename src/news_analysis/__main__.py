@@ -1,7 +1,7 @@
 import os
 import sys
 
-from news_analysis.hdfs import HdfsService
+from news_analysis.service import HdfsService
 
 # Remove '' and current working directory from the first entry
 # of sys.path, if present to avoid using current directory
