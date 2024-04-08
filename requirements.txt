@@ -1,0 +1,5 @@
+#--extra-index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
+hdfs==2.7.3; python_full_version >= "3.7.1" and python_version < "4.0"
+pyarrow==15.0.2; python_full_version >= "3.7.1" and python_version < "4.0"
+pydantic==2.6.4; python_full_version >= "3.7.1" and python_version < "4.0"
