@@ -22,7 +22,7 @@ if __package__ == "":
 
 
 def main():
-    srv = HdfsService(host="db-linux", port=8020, user='root')
+    srv = HdfsService(address='hdfs://db-linux:8020?user=root')
     data = srv.read(path="/materials/news/test.par")
     print(data)
 
