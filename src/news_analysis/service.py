@@ -1,6 +1,11 @@
-import hdfs
+from typing import List
 
-from pyarrow import parquet
+import happybase
+
+from news_analysis import schemas
+
+
+# import phoenixdb
 
 
 # os.environ['HADOOP_HOME'] = 'D:/tools/develop/hadoop-2.9.0'
@@ -8,17 +13,53 @@ from pyarrow import parquet
 # os.environ['CLASSPATH'] = '$HADOOP_HOME/bin/hdfs classpath --glob'
 # os.environ['ARROW_LIBHDFS_DIR'] = '/apps/app/hadoop-3.3.6/lib/native'
 
+# class NewsService:
+#
+#     def __init__(self, db_url: str):
+#         self.conn = phoenixdb.connect(url=db_url, autocommit=True)
+#
+#     def read(self) -> List[schemas.News]:
+#         with self.conn.cursor() as cursor:
+#             cursor.execute("SELECT * FROM news")
+#             rows = cursor.fetchall()
+#         return list(map(lambda x: self._to_news_(x), rows))
+#
+#     def _to_news_(self, row) -> schemas.News:
+#         return schemas.News(**row)
 
-class HdfsService:
-    def __init__(self, address: str, user: str = None):
-        # self.hdfs_conn = fs.HadoopFileSystem(address)
-        self.hdfs_conn = hdfs.InsecureClient(url=address, user=user or 'root')
 
-    def read(self, path: str):
-        with self.hdfs_conn.read(path) as reader:
-            news_data = parquet.read_table(source=path, filesystem=reader)
-            return news_data.to_pandas()
+class NewsService:
 
-    def read_bak(self, path: str):
-        news_data = parquet.read_table(source=path, filesystem=self.hdfs_conn)
-        return news_data.to_pandas()
+    def __init__(self, host: str, port: int = None):
+        self.conn = happybase.Connection(host=host, port=port or 9090, autoconnect=False)
+        self.tab = self.conn.table(schemas.News.table_name())
+
+    def read_news(self) -> List[schemas.News]:
+        """
+        查询新闻
+        :return:
+        """
+        rows = []
+        try:
+            self.conn.open()
+            for key, data in self.tab.scan():
+                rows.append(schemas.News.of(row=data, rid=key.decode()))
+            return rows
+        finally:
+            self.conn.close()
+
+    def analysis_news(self, news_list: List[schemas.News]) -> List[schemas.NewsMetrics]:
+        """
+        分析新闻,生成指标
+        :param news_list:
+        :return:
+        """
+        ...
+
+    def save_metrics(self, metric_list: List[schemas.NewsMetrics]):
+        """
+        保存指标
+        :param metric_list:
+        :return:
+        """
+        ...

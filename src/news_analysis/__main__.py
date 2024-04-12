@@ -1,7 +1,7 @@
 import os
 import sys
 
-from news_analysis.service import HdfsService
+from news_analysis.service import NewsService
 
 # Remove '' and current working directory from the first entry
 # of sys.path, if present to avoid using current directory
@@ -22,9 +22,14 @@ if __package__ == "":
 
 
 def main():
-    srv = HdfsService(address='hdfs://db-linux:8020?user=root')
-    data = srv.read(path="/materials/news/test.par")
-    print(data)
+    srv = NewsService(host='db-linux', port=9090)
+    # query news
+    news_list = srv.read_news()
+    print(news_list)
+    # analysis news
+    metric_list = srv.analysis_news(news_list=news_list)
+    # save result
+    srv.save_metrics(metric_list=metric_list)
 
 
 if __name__ == '__main__':
