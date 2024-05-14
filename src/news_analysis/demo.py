@@ -18,6 +18,7 @@ token_length = 256
 hidden_size = 768
 
 labels_dict = {
+    "时尚": 0,
     "汽车": 1,
     "财经": 2,
     "科技": 3,
@@ -27,7 +28,6 @@ labels_dict = {
     "文化": 7,
     "军事": 8,
     "娱乐": 9,
-    "时尚": 0,
 }
 num_labels = len(labels_dict)
 col_label = 'classify'
@@ -81,6 +81,9 @@ class BertClassifier(nn.Module):
         linear_output = self.linear(dropout_output)
         final_layer = self.relu(linear_output)
         return final_layer
+
+    def save_model(self, output_dir: str):
+        self.bert.save_pretrained(output_dir)
 
 
 # 从上面的代码可以看出，BERT Classifier 模型输出了两个变量：
@@ -198,3 +201,5 @@ if __name__ == '__main__':
     train(model, df_train, df_val, LR, EPOCHS)
     # 用测试数据集进行测试
     evaluate(model, df_test)
+    # 保存
+    model.save_model(f'{MODEL_DIR}/tuning/news/')

@@ -7,14 +7,18 @@ from datasets import load_dataset, Dataset
 from transformers import BertTokenizer, PreTrainedTokenizer, PreTrainedModel, BertForSequenceClassification, \
     BertTokenizerFast, TrainingArguments, Trainer
 
-CACHE_DIR = 'D:/data/huggingface/cache'
-DS_DIR = 'D:/data/huggingface/datasets'
-MODEL_DIR = 'D:/data/huggingface/models'
-token_length = 256
+BASE_DIR = 'D:/data/huggingface'
+CACHE_DIR = f'{BASE_DIR}/cache'
+DS_DIR = f'{BASE_DIR}datasets'
+MODEL_DIR = f'{BASE_DIR}/models'
+RESULT_DIR = f'{BASE_DIR}/results'
+LOG_DIR = f'{BASE_DIR}/logs'
+token_length = 128
 col_label = 'classify'
 col_content = 'content'
 
 labels_dict = {
+    "时尚": 0,
     "汽车": 1,
     "财经": 2,
     "科技": 3,
@@ -24,7 +28,6 @@ labels_dict = {
     "文化": 7,
     "军事": 8,
     "娱乐": 9,
-    "时尚": 0,
 }
 num_labels = len(labels_dict)
 
@@ -40,18 +43,21 @@ def train_test_split(ds: Dataset, test_ratio: float) -> Tuple[Dataset, Dataset]:
 
 
 def conv2input(tokenizer: PreTrainedTokenizer, data: MutableMapping, max_length: int) -> MutableMapping:
-    # 分类
-    labels = list(map(classify_label, data.get(col_label)))
     # 内容
     token = tokenizer(text=data.get(col_content), add_special_tokens=True, max_length=max_length,
                       padding='max_length', truncation=True, return_tensors="pt",
                       return_token_type_ids=True, return_attention_mask=True, )
     data.update({
-        "labels": labels,
         "input_ids": token.get('input_ids'),
         "attention_mask": token.get('attention_mask'),
         "token_type_ids": token.get('token_type_ids'),
     })
+    # 分类
+    labels = data.get(col_label, [])
+    if labels:
+        data.update({
+            "labels": list(map(classify_label, labels)),
+        })
     return data
 
 
@@ -104,7 +110,47 @@ def tuning_news():
     # 评估
     trainer.evaluate()
     # 保存
-    trainer.save_model(f'{MODEL_DIR}/tuning/')
+    trainer.save_model(f'{MODEL_DIR}/tuning/news/')
+
+
+def predict_news():
+    # load model
+    model_path = f'{MODEL_DIR}/tuning/news'
+    model: PreTrainedModel = BertForSequenceClassification.from_pretrained(model_path,
+                                                                           classifier_dropout=0.5,
+                                                                           num_labels=num_labels)
+    tokenizer = BertTokenizerFast.from_pretrained(f'{MODEL_DIR}/bert-base-chinese')
+    print(model)
+    # load data
+    ds_predict = load_dataset(path='csv', data_files=[f'{DS_DIR}/news/predict-news.csv'], cache_dir=CACHE_DIR)
+    # 构建输入向量
+    ds_predict = ds_predict.get('train').map(
+        function=lambda data: conv2input(tokenizer=tokenizer, data=data, max_length=token_length),
+        batched=True, batch_size=100)
+    # 选择列
+    ds_predict.set_format('torch', columns=['input_ids', 'attention_mask'])
+    print(ds_predict)
+    # 定义优化器,损失函数
+    batch_size = 4
+    epochs = 3
+    warmup_steps = 100
+    weight_decay = 0.01
+    training_args = TrainingArguments(
+        output_dir=RESULT_DIR,
+        num_train_epochs=epochs,
+        per_device_train_batch_size=batch_size,
+        per_device_eval_batch_size=batch_size,
+        warmup_steps=warmup_steps,
+        weight_decay=weight_decay,
+        logging_dir=LOG_DIR,
+        optim="adamw_torch",  # 修复告警
+    )
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+    )
+    output = trainer.predict(ds_predict)
+    print(output)
 
 
 def pad_list(data: list, length: int, pad: any) -> list:
@@ -155,4 +201,5 @@ def tokenize(tokenizer: PreTrainedTokenizer, txt: str, ) -> dict:
 if __name__ == '__main__':
     # test_bert()
     # np2torch()
-    tuning_news()
+    # tuning_news()
+    predict_news()
