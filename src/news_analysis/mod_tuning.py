@@ -9,7 +9,7 @@ from transformers import BertTokenizer, PreTrainedTokenizer, PreTrainedModel, Be
 
 BASE_DIR = 'D:/data/huggingface'
 CACHE_DIR = f'{BASE_DIR}/cache'
-DS_DIR = f'{BASE_DIR}datasets'
+DS_DIR = f'{BASE_DIR}/datasets'
 MODEL_DIR = f'{BASE_DIR}/models'
 RESULT_DIR = f'{BASE_DIR}/results'
 LOG_DIR = f'{BASE_DIR}/logs'
@@ -32,9 +32,9 @@ labels_dict = {
 num_labels = len(labels_dict)
 
 
-def classify_label(classify: str) -> [int]:
-    # return classify_dict.get(classify, 0)
-    return numpy.array(labels_dict.get(classify, 0))
+def classify_label(classify: str) -> int:
+    return labels_dict.get(classify, 0)
+    # return numpy.array(labels_dict.get(classify, 0))
 
 
 def train_test_split(ds: Dataset, test_ratio: float) -> Tuple[Dataset, Dataset]:
@@ -56,12 +56,16 @@ def conv2input(tokenizer: PreTrainedTokenizer, data: MutableMapping, max_length:
     labels = data.get(col_label, [])
     if labels:
         data.update({
-            "labels": list(map(classify_label, labels)),
+            "label": list(map(classify_label, labels)),
         })
     return data
 
 
 def tuning_news():
+    """
+    新闻分类预模型训练
+    :return:
+    """
     # load model
     model_path = f'{MODEL_DIR}/bert-base-chinese'
     model: PreTrainedModel = BertForSequenceClassification.from_pretrained(model_path,
@@ -79,14 +83,14 @@ def tuning_news():
     ds_test = ds_test.map(function=lambda data: conv2input(tokenizer=tokenizer, data=data, max_length=token_length),
                           batched=True, batch_size=100)
     # 选择列
-    ds_train.set_format('torch', columns=['input_ids', 'attention_mask', 'labels'])
-    ds_test.set_format('torch', columns=['input_ids', 'attention_mask', 'labels'])
+    ds_train.set_format('torch', columns=['input_ids', 'attention_mask', 'label'])
+    ds_test.set_format('torch', columns=['input_ids', 'attention_mask', 'label'])
 
     print(ds_train)
     print(ds_test)
     # 定义优化器,损失函数
-    batch_size = 4
-    epochs = 3
+    batch_size = 8
+    epochs = 5
     warmup_steps = 100
     weight_decay = 0.01
     training_args = TrainingArguments(
@@ -114,6 +118,10 @@ def tuning_news():
 
 
 def predict_news():
+    """
+    新闻分类模型预测
+    :return:
+    """
     # load model
     model_path = f'{MODEL_DIR}/tuning/news'
     model: PreTrainedModel = BertForSequenceClassification.from_pretrained(model_path,
@@ -131,8 +139,8 @@ def predict_news():
     ds_predict.set_format('torch', columns=['input_ids', 'attention_mask'])
     print(ds_predict)
     # 定义优化器,损失函数
-    batch_size = 4
-    epochs = 3
+    batch_size = 8
+    epochs = 5
     warmup_steps = 100
     weight_decay = 0.01
     training_args = TrainingArguments(
@@ -201,5 +209,5 @@ def tokenize(tokenizer: PreTrainedTokenizer, txt: str, ) -> dict:
 if __name__ == '__main__':
     # test_bert()
     # np2torch()
-    # tuning_news()
-    predict_news()
+    tuning_news()
+    # predict_news()
