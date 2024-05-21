@@ -134,25 +134,8 @@ def predict_news():
     # 选择列
     ds_predict.set_format('torch', columns=['input_ids', 'attention_mask'])
     print(ds_predict)
-    # 定义优化器,损失函数
-    batch_size = 8
-    epochs = 5
-    warmup_steps = 100
-    weight_decay = 0.01
-    training_args = TrainingArguments(
-        output_dir=RESULT_DIR,
-        num_train_epochs=epochs,
-        per_device_train_batch_size=batch_size,
-        per_device_eval_batch_size=batch_size,
-        warmup_steps=warmup_steps,
-        weight_decay=weight_decay,
-        logging_dir=LOG_DIR,
-        optim="adamw_torch",  # 修复告警
-    )
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-    )
+    # 预测
+    trainer = Trainer(model=model, )
     output = trainer.predict(ds_predict)
     print(output)
 
