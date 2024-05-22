@@ -1,5 +1,4 @@
 """test python"""
-
 from typing import Tuple, MutableMapping
 
 import numpy
@@ -15,7 +14,9 @@ from transformers import (
     PreTrainedTokenizerBase,
 )
 
-BASE_DIR = "/home/apps/data/huggingface"
+from tuning.constants import DATA_DIR
+
+BASE_DIR = f"{DATA_DIR}/hugginface"
 CACHE_DIR = f"{BASE_DIR}/cache"
 DS_DIR = f"{BASE_DIR}/datasets"
 MODEL_DIR = f"{BASE_DIR}/models"
@@ -51,7 +52,7 @@ def train_test_split(ds: Dataset, test_ratio: float) -> Tuple[Dataset, Dataset]:
 
 
 def conv2input(
-    tokenizer: PreTrainedTokenizer, data: MutableMapping, max_length: int
+        tokenizer: PreTrainedTokenizer, data: MutableMapping, max_length: int
 ) -> MutableMapping:
     # 内容
     tokens = tokenizer(
@@ -229,5 +230,5 @@ def tokenize(tokenizer: PreTrainedTokenizerBase, txt: str) -> dict:
 if __name__ == "__main__":
     # test_tokens()
     # np2torch()
-    # tuning_news()
-    predict_news()
+    tuning_news()
+    # predict_news()

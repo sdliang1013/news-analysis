@@ -1,13 +1,14 @@
 """test python"""
-
 from typing import Tuple, MutableMapping
 
 from datasets import load_dataset, Dataset
-from modelscope import AutoTokenizer, AutoModelForSequenceClassification
-from swift import LoRAConfig, Swift, TrainingArguments, Trainer
-from transformers import default_data_collator
+from modelscope import MsDataset, pipeline, Exporter
+from modelscope.preprocessors import TextClassificationTransformersPreprocessor
+from modelscope.trainers import build_trainer
 
-BASE_DIR = "/home/apps/data/modelscope"
+from tuning.constants import DATA_DIR
+
+BASE_DIR = f"{DATA_DIR}/modelscope"
 CACHE_DIR = f"{BASE_DIR}/cache"
 DS_DIR = f"{BASE_DIR}/datasets"
 MODEL_DIR = f"{BASE_DIR}/models"
@@ -42,21 +43,7 @@ def train_test_split(ds: Dataset, test_ratio: float) -> Tuple[Dataset, Dataset]:
     return ds_split.get("train"), ds_split.get("test")
 
 
-def conv2input(
-    tokenizer: AutoTokenizer, data: MutableMapping, max_length: int
-) -> MutableMapping:
-    # 内容
-    tokens = tokenizer(
-        text=data.get(col_content),
-        add_special_tokens=True,
-        max_length=max_length,
-        padding="max_length",
-        truncation=True,
-        return_tensors="pt",
-        return_token_type_ids=True,
-        return_attention_mask=True,
-    )
-    data.update(tokens)
+def conv2input(data: MutableMapping) -> MutableMapping:
     # 分类
     labels = data.get(col_label, [])
     if labels:
@@ -70,14 +57,13 @@ def conv2input(
 
 # 这个方法在trainer读取configuration.json后立即执行，先于构造模型、预处理器等组件
 def cfg_modify_fn(cfg):
-    # warmup_steps = 100
-    # weight_decay = 0.01
+    batch_size = 16  # 与cpu核数相当
     cfg.task = "text-classification"
     cfg.pipeline = {"type": "text-classification"}
     cfg.preprocessor = {
         "train": {
             # 配置预处理器名字
-            "type": "sen-cls-tokenizer",
+            "type": "bert-seq-cls-tokenizer",
             # 配置句子1的key
             "first_sequence": col_content,
             # 配置label
@@ -88,7 +74,7 @@ def cfg_modify_fn(cfg):
         },
         "val": {
             # 配置预处理器名字
-            "type": "sen-cls-tokenizer",
+            "type": "bert-seq-cls-tokenizer",
             # 配置句子1的key
             "first_sequence": col_content,
             # 配置label
@@ -102,8 +88,8 @@ def cfg_modify_fn(cfg):
         "work_dir": RESULT_DIR,
         "max_epochs": 5,
         "dataloader": {
-            # batch_size
-            "batch_size_per_gpu": 2048,
+            # batch_size 16
+            "batch_size_per_gpu": batch_size,
             "workers_per_gpu": 0,
         },
         "optimizer": {
@@ -117,7 +103,6 @@ def cfg_modify_fn(cfg):
             "type": "LinearLR",
             "start_factor": 1.0,
             "end_factor": 0.0,
-            "total_iters": None,
             "options": {"by_epoch": False},
         },
         "hooks": [
@@ -135,8 +120,8 @@ def cfg_modify_fn(cfg):
     }
     cfg["evaluation"] = {
         "dataloader": {
-            # batch_size
-            "batch_size_per_gpu": 2048,
+            # batch_size 16
+            "batch_size_per_gpu": batch_size,
             "workers_per_gpu": 0,
             "shuffle": False,
         },
@@ -148,22 +133,25 @@ def cfg_modify_fn(cfg):
             }
         ],
     }
+    cfg.train.lr_scheduler.total_iters = int(train_len / cfg.train.dataloader.batch_size_per_gpu) * cfg.train.max_epochs
     return cfg
 
 
 def tuning_model():
     """
     预模型训练
+    PS: 实际运行时, 没有看到train步骤, 只有test步骤
     :return:
     """
     # load model
     model_path = f"{MODEL_DIR}/nlp_roberta_backbone_base_std"
-    model = AutoModelForSequenceClassification.from_pretrained(
-        model_path, classifier_dropout=0.5, num_labels=num_labels
+    preprocessor = TextClassificationTransformersPreprocessor(
+        model_dir=model_path,
+        first_sequence="content",
+        padding=True,
+        max_length=128,
+        use_fast=True,
     )
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-    lora_config = LoRAConfig(target_modules=["query", "key", "value"])
-    model = Swift.prepare_model(model=model, config=lora_config)
     # load data
     # df = pd.read_csv(filepath_or_buffer=f'{DS_DIR}/news/sogou-news.txt.csv')
     ds = load_dataset(
@@ -172,54 +160,41 @@ def tuning_model():
         cache_dir=CACHE_DIR,
     )
     # 构建输入向量
-    ds_train, ds_eval = train_test_split(ds=ds.get("train"), test_ratio=0.1)
+    ds_train, ds_test = train_test_split(ds=ds.get("train"), test_ratio=0.1)
     ds_train = ds_train.map(
-        function=lambda data: conv2input(
-            tokenizer=tokenizer, data=data, max_length=128
-        ),
-        batched=True,
-        batch_size=100,
+        function=lambda data: conv2input(data=data), batched=True, batch_size=100
     )
-    ds_eval = ds_eval.map(
-        function=lambda data: conv2input(
-            tokenizer=tokenizer, data=data, max_length=128
-        ),
-        batched=True,
-        batch_size=100,
+    ds_test = ds_test.map(
+        function=lambda data: conv2input(data=data), batched=True, batch_size=100
     )
     # 选择列
-    ds_train.set_format("torch", columns=["input_ids", "attention_mask", "label"])
-    ds_eval.set_format("torch", columns=["input_ids", "attention_mask", "label"])
+    ds_train.set_format("torch", columns=[col_content, "label"])
+    ds_test.set_format("torch", columns=[col_content, "label"])
 
+    global train_len
+    train_len = len(ds_train)
     print(ds_train)
-    print(ds_eval)
-    batch_size = 16
-    epochs = 5
-    warmup_steps = 100
-    weight_decay = 0.01
-    training_args = TrainingArguments(
-        output_dir=RESULT_DIR,
-        num_train_epochs=epochs,
-        per_device_train_batch_size=batch_size,
-        per_device_eval_batch_size=batch_size,
-        warmup_steps=warmup_steps,
-        weight_decay=weight_decay,
-        logging_dir=LOG_DIR,
-        optim="adamw_torch",  # 修复告警
+    print(ds_test)
+
+    training_args = dict(
+        model=model_path,
+        train_dataset=MsDataset.to_ms_dataset(ds_train),
+        eval_dataset=MsDataset.to_ms_dataset(ds_test),
+        cfg_modify_fn=cfg_modify_fn,
+        cfg_file=f"{model_path}/configuration.json",
+        device="cpu",
     )
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=ds_train,
-        eval_dataset=ds_eval,
-        data_collator=default_data_collator,
-    )
+    trainer = build_trainer(default_args=training_args)
     # 训练
     trainer.train()
     # 评估
     trainer.evaluate()
     # 保存
-    trainer.save_model(f"{MODEL_DIR}/tuning/news/")
+    output_files = Exporter.from_model(model_path).export_onnx(
+        opset=13,
+        output_dir=f"{MODEL_DIR}/tuning/news/",
+    )
+    print(output_files)
 
 
 def predict_classify():
@@ -229,21 +204,16 @@ def predict_classify():
     """
     # load model
     model_path = f"{MODEL_DIR}/tuning/news"
-    model = AutoModelForSequenceClassification.from_pretrained(
-        model_path, classifier_dropout=0.5, num_labels=num_labels
-    )
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-    model = Swift.from_pretrained(model=model)
+    pl = pipeline(task="text-classification", model=model_path, device="cpu")
+    print(pl.model)
     # load data
-    output = model(
-        **tokenizer(
-            "近日，理想汽车被投资者集体诉讼至法院，投资者指控该公司及其部分高管虚假陈述，违反证券法令投资者受损，并向法院申请判令被告赔偿因其违法行为导致股价下跌给投资者造成的损失。",
-            return_tensors="pt",
-        )
+    output = pl(
+        "百度在AI时代开启自我革命，用AI重构搜索和传统业务，同时也在自动驾驶等新业务上展现领先实力。尽管过程中遭遇冷眼和嘲讽，百度坚持AI发展，并在ChatGPT出现后走在中文互联网前列。百度借助AI对自身进行深度改造，展现了巨大的发展潜能和勇气，焕发新生。"
     )
     print(output)
 
 
 if __name__ == "__main__":
+    train_len = 700
     tuning_model()
     # predict_classify()
