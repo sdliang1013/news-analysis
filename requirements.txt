@@ -15,3 +15,7 @@ fasttext==0.9.2
 onnx==1.16.0
 onnxruntime==1.18.0
 ms-swift[llm]==2.0.4
+# OpenCV 是一个开源的计算机视觉和图像处理库
+opencv-python==4.9.0.80
+# GPTQ量化模型依赖, 需要GPU环境, CPU不支持torch.float16
+auto_gptq==0.7.1
