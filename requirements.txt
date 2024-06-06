@@ -10,6 +10,7 @@ transformers[torch]==4.40.2
 datasets==2.18.0
 evaluate==0.4.2
 selectolax==0.3.21
+#pip install "modelscope[nlp]" -f https://modelscope.oss-cn-beijing.aliyuncs.com/releases/repo.html
 modelscope[nlp]==1.14.0
 fasttext==0.9.2
 onnx==1.16.0
