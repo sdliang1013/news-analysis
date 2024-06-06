@@ -33,12 +33,14 @@ def add_server_args(parser):
     parser.add_argument(
         '--llm_first',
         type=bool,
-        default=True,
+        default=False,
         help='Use LLMPipeline first for llm models.')
+    parser.add_argument(
+        '--device', type=str, default='gpu', help='The device by cpu or gpu')
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser('modelscope_server')
+    parser = argparse.ArgumentParser('local_model_server')
     add_server_args(parser)
     args = parser.parse_args()
     app = get_app(args)

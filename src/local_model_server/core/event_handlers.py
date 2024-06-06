@@ -13,14 +13,17 @@ from modelscope.utils.logger import get_logger
 logger = get_logger()
 
 
-def _create_pipeline(model_path: str, revision: str = None, llm_first: bool = True):
+def _create_pipeline(model_path: str, revision: str = None,
+                     llm_first: bool = False,
+                     device: str = None):
     config_file_path = os.path.join(model_path, ModelFile.CONFIGURATION)
     cfg = Config.from_file(config_file_path)
     return pipeline(
         task=cfg.task,
         model=model_path,
         model_revision=revision,
-        llm_first=llm_first)
+        device=device or "gpu",
+        llm_first=llm_first, )
 
 
 def _startup_model(app: FastAPI) -> None:
@@ -29,7 +32,8 @@ def _startup_model(app: FastAPI) -> None:
     args = state.args
     state.pipeline = _create_pipeline(args.model_id,
                                       args.revision,
-                                      args.llm_first)
+                                      args.llm_first,
+                                      args.device)
     info = {
         "task_name": state.pipeline.group_key,
         "schema": get_task_schemas(state.pipeline.group_key)
