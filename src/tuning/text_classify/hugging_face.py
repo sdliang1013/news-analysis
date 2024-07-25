@@ -14,7 +14,7 @@ from transformers import (
     PreTrainedTokenizerBase,
 )
 
-from tuning.constants import DATA_DIR
+from ai_env.constants import DATA_DIR
 
 BASE_DIR = f"{DATA_DIR}/hugginface"
 CACHE_DIR = f"{BASE_DIR}/cache"

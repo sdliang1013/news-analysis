@@ -6,7 +6,7 @@ from modelscope import MsDataset, pipeline, Exporter
 from modelscope.preprocessors import TextClassificationTransformersPreprocessor
 from modelscope.trainers import build_trainer
 
-from tuning.constants import DATA_DIR
+from ai_env.constants import DATA_DIR
 
 BASE_DIR = f"{DATA_DIR}/modelscope"
 CACHE_DIR = f"{BASE_DIR}/cache"

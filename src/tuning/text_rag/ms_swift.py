@@ -1,5 +1,4 @@
 """test python"""
-import platform
 from typing import Tuple, MutableMapping
 
 from datasets import load_dataset, Dataset
@@ -7,7 +6,7 @@ from modelscope import AutoTokenizer, AutoModelForSequenceClassification
 from swift import LoRAConfig, Swift, TrainingArguments, Trainer
 from transformers import default_data_collator
 
-from tuning.constants import DATA_DIR
+from ai_env.constants import DATA_DIR
 
 BASE_DIR = f"{DATA_DIR}/modelscope"
 CACHE_DIR = f"{BASE_DIR}/cache"
